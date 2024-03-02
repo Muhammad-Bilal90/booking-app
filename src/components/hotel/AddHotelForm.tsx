@@ -42,7 +42,6 @@ import {
   Eye,
   Loader2,
   PencilLine,
-  Plug,
   Plus,
   Terminal,
   Trash,
@@ -51,7 +50,9 @@ import {
 import { ICity, IState } from "country-state-city";
 import useLocation from "@/hooks/useLocation";
 import { useRouter } from "next/navigation";
-import AddRoomForm from "../room/addRoomForm";
+import AddRoomForm from "../room/AddRoomForm";
+import RoomCard from "../room/RoomCard";
+import { Separator } from "../ui/separator";
 
 interface AddHotelFormProps {
   hotel: HotelWithRooms | null;
@@ -755,6 +756,19 @@ const AddHotelForm = ({ hotel }: AddHotelFormProps) => {
                   </Button>
                 )}
               </div>
+              {hotel && !!hotel.rooms.length && (
+                <div>
+                  <Separator />
+                  <h3 className="text-lg font-semibold my-4">Hotel Rooms</h3>
+                  <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+                    {hotel.rooms.map((room) => {
+                      return (
+                        <RoomCard key={room.id} hotel={hotel} room={room} />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </form>
