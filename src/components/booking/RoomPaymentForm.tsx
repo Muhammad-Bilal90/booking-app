@@ -140,12 +140,6 @@ const RoomPaymentForm = ({
     }
   };
 
-  if (!bookingRoomData?.startDate || !bookingRoomData?.endDate)
-    return <div>Error: Missing reservation dates</div>;
-
-  const startDate = moment(bookingRoomData?.startDate).format("MMMM DD YYYY");
-  const endDate = moment(bookingRoomData?.endDate).format("MMMM DD YYYY");
-
   useEffect(() => {
     if (!stripe) {
       return;
@@ -158,6 +152,12 @@ const RoomPaymentForm = ({
     handleSetPaymentSuccess(false);
     setIsLoading(false);
   }, [stripe]);
+
+  if (!bookingRoomData?.startDate || !bookingRoomData?.endDate)
+    return <div>Error: Missing reservation dates</div>;
+
+  const startDate = moment(bookingRoomData?.startDate).format("MMMM DD YYYY");
+  const endDate = moment(bookingRoomData?.endDate).format("MMMM DD YYYY");
 
   return (
     <form onSubmit={handleSubmit} id="payment-form">
@@ -192,7 +192,8 @@ const RoomPaymentForm = ({
             <AlertTitle>Payment Processing...</AlertTitle>
             <AlertDescription>
               <div>
-                Please don't leave this page until your payment is not processed
+                Please don&apos;t leave this page until your payment is not
+                processed
               </div>
             </AlertDescription>
           </Alert>
