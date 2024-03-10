@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Container from "./Container";
 import {
   Select,
@@ -24,6 +24,7 @@ const LocationFilter = () => {
 
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const { getAllCountries, getCountryStates, getStateCities } = useLocation();
 
   const countries = getAllCountries();
@@ -102,6 +103,8 @@ const LocationFilter = () => {
 
     router.push(url);
   }, [country, state, city]);
+
+  if (pathname !== "/") return null;
 
   return (
     <Container>
