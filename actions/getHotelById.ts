@@ -1,5 +1,4 @@
 import prismadb from "@/lib/prismadb";
-import React from "react";
 
 export const getHotelById = async (hotelId: string) => {
   try {

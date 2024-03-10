@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Booking, Hotel, Room } from "@prisma/client";
@@ -22,7 +22,6 @@ import {
   Home,
   Loader2,
   Pencil,
-  Plus,
   Ship,
   Trash,
   Trees,
@@ -30,6 +29,7 @@ import {
   Users,
   UtensilsCrossed,
   VolumeX,
+  Wand2,
   Wifi,
 } from "lucide-react";
 import { Separator } from "../ui/separator";
@@ -44,6 +44,13 @@ import {
 } from "../ui/dialog";
 import AddRoomForm from "./AddRoomForm";
 import axios from "axios";
+import { DatePickerWithRange } from "./DateRangePicker";
+import { DateRange } from "react-day-picker";
+import { differenceInCalendarDays, eachDayOfInterval } from "date-fns";
+import { Checkbox } from "../ui/checkbox";
+import { useAuth } from "@clerk/nextjs";
+import { useToast } from "@/components/ui/use-toast";
+import useBookRoom from "@/hooks/useBookRoom";
 
 interface RoomCardProps {
   hotel?: Hotel & {
@@ -54,12 +61,39 @@ interface RoomCardProps {
 }
 
 const RoomCard = ({ hotel, room, bookings = [] }: RoomCardProps) => {
+  const { setRoomData, paymentIntentId, setClientSecret, setPaymentIntentId } =
+    useBookRoom();
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [bookingIsLoading, setBookingIsLoading] = useState<boolean>(false);
   const [openDialog, setOpenDialog] = useState<boolean>(false);
+  const [date, setDate] = useState<DateRange | undefined>();
+  const [totalPrice, setTotalPrice] = useState<number>(room.roomPrice);
+  const [includeBreakfast, setIncludeBreakfast] = useState<boolean>(false);
+  const [days, setDays] = useState(1);
 
+  const { userId } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const { toast } = useToast();
   const isHotelDetailsPage = pathname.includes("hotel-details");
+  const isBookRoomPage = pathname.includes("book-room");
+
+  const disabledDates = useMemo(() => {
+    let dates: Date[] = [];
+
+    const roomBookings = bookings.filter(
+      (booking) => booking.roomId === room.id && booking.paymentStatus
+    );
+
+    roomBookings.forEach((booking) => {
+      const range = eachDayOfInterval({
+        start: new Date(booking.startDate),
+        end: new Date(booking.endDate),
+      });
+      dates = [...dates, ...range];
+    });
+    return dates;
+  }, [bookings]);
 
   const handleDialogOpen = () => {
     setOpenDialog((prev) => !prev);
@@ -90,6 +124,97 @@ const RoomCard = ({ hotel, room, bookings = [] }: RoomCardProps) => {
       });
   };
 
+  const handleBookRoom = () => {
+    if (!userId)
+      return toast({
+        variant: "destructive",
+        description: "Oops! Make sure you are logged in.",
+      });
+
+    if (!hotel?.userId)
+      return toast({
+        variant: "destructive",
+        description: "Something went wrong, refresh the page and try again!",
+      });
+
+    if (date?.from && date?.to) {
+      setBookingIsLoading(true);
+
+      const bookingRoomData = {
+        room,
+        totalPrice,
+        breakFastIncluded: includeBreakfast,
+        startDate: date.from,
+        endDate: date.to,
+      };
+
+      setRoomData(bookingRoomData);
+
+      fetch("/api/create-payment-intent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          booking: {
+            hotelOwnerId: hotel.userId,
+            hotelId: hotel.id,
+            roomId: room.id,
+            startDate: date.from,
+            endDate: date.to,
+            breakFastIncluded: includeBreakfast,
+            totalPrice: totalPrice,
+          },
+          payment_intent_id: paymentIntentId,
+        }),
+      })
+        .then((res) => {
+          setBookingIsLoading(false);
+          if (res.status === 401) {
+            return router.push("/login");
+          }
+          return res.json();
+        })
+        .then((data) => {
+          setClientSecret(data.paymentIntent.client_secret);
+          setPaymentIntentId(data.paymentIntent.id);
+          router.push("/book-room");
+        })
+        .catch((error: any) => {
+          console.log("ERROR:", error);
+          toast({
+            variant: "destructive",
+            description: `ERROR! ${error.message}`,
+          });
+        });
+    } else {
+      toast({
+        variant: "destructive",
+        description: "Oops! Select Date",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (date && date.from && date.to) {
+      const dayCount = differenceInCalendarDays(date.to, date.from);
+      // console.log("asas");
+      setDays(dayCount);
+
+      if (dayCount && room.roomPrice) {
+        if (includeBreakfast && room.breakFastPrice) {
+          setTotalPrice(
+            dayCount * room.roomPrice + dayCount * room.breakFastPrice
+          );
+        } else {
+          setTotalPrice(dayCount * room.roomPrice);
+        }
+      } else {
+        setTotalPrice(room.roomPrice);
+      }
+    }
+  }, [date, room.roomPrice, includeBreakfast]);
+
   return (
     <Card>
       <CardHeader>
@@ -97,7 +222,7 @@ const RoomCard = ({ hotel, room, bookings = [] }: RoomCardProps) => {
         <CardDescription>{room.description}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <div className="aspect-square overflow-hidden relative h-[200px] ropunded-lg">
+        <div className="aspect-square overflow-hidden relative h-[200px] rounded-lg">
           <Image
             fill
             src={room.image}
@@ -193,54 +318,100 @@ const RoomCard = ({ hotel, room, bookings = [] }: RoomCardProps) => {
         </div>
         <Separator />
       </CardContent>
-      <CardFooter>
-        {isHotelDetailsPage ? (
-          <div>Hotel Details Page</div>
-        ) : (
-          <div className="flex w-full justify-between">
-            <Button
-              variant="destructive"
-              type="button"
-              disabled={isLoading}
-              onClick={() => handleRoomDelete(room)}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4" /> Deleteing
-                </>
-              ) : (
-                <>
-                  <Trash className="mr-2 h-4 w-4" /> Delete
-                </>
-              )}
-            </Button>
-            <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-              <DialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="max-w-[150px]"
-                >
-                  <Pencil className="mr-2 h-4 w-4" /> Edit Room
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-[900px] w-[90%]">
-                <DialogHeader className="px-2">
-                  <DialogTitle>Edit Room</DialogTitle>
-                  <DialogDescription>
-                    Make Changes by editing this room.
-                  </DialogDescription>
-                </DialogHeader>
-                <AddRoomForm
-                  hotel={hotel}
-                  room={room}
-                  handleDialogOpen={handleDialogOpen}
+      {!isBookRoomPage && (
+        <CardFooter>
+          {isHotelDetailsPage ? (
+            <div className="flex flex-col gap-6">
+              <div>
+                <div className="mb-2">Select Days</div>
+                <DatePickerWithRange
+                  date={date}
+                  setDate={setDate}
+                  disabledDates={disabledDates}
                 />
-              </DialogContent>
-            </Dialog>
-          </div>
-        )}
-      </CardFooter>
+              </div>
+              {room.breakFastPrice > 0 && (
+                <div>
+                  <div className="mb-2">
+                    Do You want to be served with breakfast each day
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="breakfast"
+                      onCheckedChange={(value) => setIncludeBreakfast(!!value)}
+                    />
+                    <label htmlFor="breakfast" className="text-sm ">
+                      Include Breakfast
+                    </label>
+                  </div>
+                </div>
+              )}
+              <div>
+                Total Price:{" "}
+                <span className="font-bold">
+                  ${totalPrice} for{" "}
+                  <span className="font-bold">{days} Days</span>
+                </span>
+              </div>
+              <Button
+                onClick={() => handleBookRoom()}
+                disabled={bookingIsLoading}
+                type="button"
+              >
+                {bookingIsLoading ? (
+                  <Loader2 className="h-4 w-4 mr-2" />
+                ) : (
+                  <Wand2 className="h-4 w-4 mr-2" />
+                )}
+                {bookingIsLoading ? "Loading..." : "BookRoom"}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex w-full justify-between">
+              <Button
+                variant="destructive"
+                type="button"
+                disabled={isLoading}
+                onClick={() => handleRoomDelete(room)}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4" /> Deleteing
+                  </>
+                ) : (
+                  <>
+                    <Trash className="mr-2 h-4 w-4" /> Delete
+                  </>
+                )}
+              </Button>
+              <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="max-w-[150px]"
+                  >
+                    <Pencil className="mr-2 h-4 w-4" /> Edit Room
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-[900px] w-[90%]">
+                  <DialogHeader className="px-2">
+                    <DialogTitle>Edit Room</DialogTitle>
+                    <DialogDescription>
+                      Make Changes by editing this room.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <AddRoomForm
+                    hotel={hotel}
+                    room={room}
+                    handleDialogOpen={handleDialogOpen}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
+        </CardFooter>
+      )}
     </Card>
   );
 };

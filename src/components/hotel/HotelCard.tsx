@@ -7,6 +7,7 @@ import Image from "next/image";
 import useLocation from "@/hooks/useLocation";
 import AmenityItem from "../AmenityItem";
 import { Dumbbell, MapPin, Pencil, Waves } from "lucide-react";
+import { FaSwimmer } from "react-icons/fa";
 import { Button } from "../ui/button";
 
 const HotelCard = ({ hotel }: { hotel: HotelWithRooms }) => {
@@ -44,7 +45,7 @@ const HotelCard = ({ hotel }: { hotel: HotelWithRooms }) => {
             </AmenityItem>
             {hotel.swimmingPool && (
               <AmenityItem>
-                <Waves className="size-4" /> Pool
+                <FaSwimmer size={18} /> Pool
               </AmenityItem>
             )}
             {hotel.gym && (
@@ -67,7 +68,7 @@ const HotelCard = ({ hotel }: { hotel: HotelWithRooms }) => {
             {isMyHotels && (
               <Button
                 variant="outline"
-                onClick={() => router.push(`/hotel/${hotel.id}</div>`)}
+                onClick={() => router.push(`/hotel/${hotel.id}`)}
               >
                 <Pencil className="mr-2 size-4" /> Edit
               </Button>
